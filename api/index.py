@@ -128,8 +128,9 @@ def clean_html(html: str) -> str:
     insert_section_newlines(soup, root)
 
     if soup.body:
-        return "".join(str(x) for x in soup.body.contents)
-    return str(root)
+        # Format HTML with proper indentation
+        return soup.body.prettify()
+    return soup.prettify()
 
 
 class handler(BaseHTTPRequestHandler):

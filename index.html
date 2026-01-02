@@ -71,74 +71,17 @@
         border-radius: 10px;
         border: 1px solid #ccc;
         padding: 14px;
-        background: white;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial,
-          sans-serif;
-        font-size: 14px;
-        line-height: 1.6;
-      }
-      .html-output :first-child {
-        margin-top: 0;
-      }
-      .html-output :last-child {
-        margin-bottom: 0;
-      }
-      .html-output h1,
-      .html-output h2,
-      .html-output h3,
-      .html-output h4,
-      .html-output h5,
-      .html-output h6 {
-        margin: 1em 0 0.5em;
-        font-weight: 600;
-      }
-      .html-output ul,
-      .html-output ol {
-        margin: 0.5em 0;
-        padding-left: 1.5em;
-      }
-      .html-output li {
-        margin: 0.25em 0;
-      }
-      .html-output p {
-        margin: 0.5em 0;
-      }
-      .html-output blockquote {
-        margin: 0.5em 0;
-        padding-left: 1em;
-        border-left: 3px solid #ddd;
-      }
-      .html-output code,
-      .html-output pre {
+        background: #f9f9f9;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
           "Liberation Mono", "Courier New", monospace;
-        font-size: 0.9em;
-      }
-      .html-output pre {
-        background: #f5f5f5;
-        padding: 10px;
-        border-radius: 4px;
-        overflow-x: auto;
-      }
-      .html-output a {
-        color: #0066cc;
-        text-decoration: underline;
-      }
-      .html-output.viewing-source {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-          "Liberation Mono", "Courier New", monospace !important;
-        font-size: 12px !important;
-        white-space: pre-wrap !important;
-        background: #f9f9f9 !important;
+        font-size: 12px;
+        white-space: pre-wrap;
+        line-height: 1.5;
       }
       .card .actions {
         display: flex;
         gap: 10px;
         margin-top: 10px;
-      }
-      .view-toggle {
-        font-size: 12px;
-        padding: 6px 10px;
       }
       .small {
         font-size: 12px;
@@ -164,9 +107,6 @@
         <h2>Jurisdiction</h2>
         <div id="sec-jur" class="html-output"></div>
         <div class="actions">
-          <button class="btn view-toggle" data-toggle="sec-jur">
-            View HTML
-          </button>
           <button class="btn" data-copy="sec-jur">Copy HTML</button>
         </div>
       </div>
@@ -175,9 +115,6 @@
         <h2>Thresholds</h2>
         <div id="sec-thr" class="html-output"></div>
         <div class="actions">
-          <button class="btn view-toggle" data-toggle="sec-thr">
-            View HTML
-          </button>
           <button class="btn" data-copy="sec-thr">Copy HTML</button>
         </div>
       </div>
@@ -186,9 +123,6 @@
         <h2>Procedures</h2>
         <div id="sec-proc" class="html-output"></div>
         <div class="actions">
-          <button class="btn view-toggle" data-toggle="sec-proc">
-            View HTML
-          </button>
           <button class="btn" data-copy="sec-proc">Copy HTML</button>
         </div>
       </div>
@@ -197,9 +131,6 @@
         <h2>Standard of Review / Penalties</h2>
         <div id="sec-std" class="html-output"></div>
         <div class="actions">
-          <button class="btn view-toggle" data-toggle="sec-std">
-            View HTML
-          </button>
           <button class="btn" data-copy="sec-std">Copy HTML</button>
         </div>
       </div>
@@ -241,10 +172,10 @@
           htmlSources["sec-proc"] = sections.procedures;
           htmlSources["sec-std"] = sections.standard;
 
-          secJur.innerHTML = sections.jurisdiction;
-          secThr.innerHTML = sections.thresholds;
-          secProc.innerHTML = sections.procedures;
-          secStd.innerHTML = sections.standard;
+          secJur.textContent = sections.jurisdiction;
+          secThr.textContent = sections.thresholds;
+          secProc.textContent = sections.procedures;
+          secStd.textContent = sections.standard;
 
           out.style.display = "grid";
           setStatus("Done.");
@@ -320,10 +251,10 @@
       async function convertDocx(file) {
         setStatus("Converting…");
         out.style.display = "none";
-        secJur.innerHTML =
-          secThr.innerHTML =
-          secProc.innerHTML =
-          secStd.innerHTML =
+        secJur.textContent =
+          secThr.textContent =
+          secProc.textContent =
+          secStd.textContent =
             "";
         htmlSources["sec-jur"] =
           htmlSources["sec-thr"] =
@@ -342,30 +273,8 @@
         return await res.text();
       }
 
-      // Toggle between rendered HTML and HTML source
+      // Copy buttons
       document.addEventListener("click", async (e) => {
-        const toggleBtn = e.target.closest("[data-toggle]");
-        if (toggleBtn) {
-          const id = toggleBtn.getAttribute("data-toggle");
-          const el = document.getElementById(id);
-          const isViewingSource = el.classList.contains("viewing-source");
-
-          if (isViewingSource) {
-            // Switch back to rendered HTML
-            el.innerHTML = htmlSources[id];
-            el.classList.remove("viewing-source");
-            toggleBtn.textContent = "View HTML";
-          } else {
-            // Switch to HTML source
-            const source = htmlSources[id] || "";
-            el.textContent = source;
-            el.classList.add("viewing-source");
-            toggleBtn.textContent = "View Rendered";
-          }
-          return;
-        }
-
-        // Copy buttons
         const btn = e.target.closest("[data-copy]");
         if (!btn) return;
         const id = btn.getAttribute("data-copy");
