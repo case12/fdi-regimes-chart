@@ -137,7 +137,7 @@ class handler(BaseHTTPRequestHandler):
         try:
             ctype, pdict = cgi.parse_header(self.headers.get("content-type", ""))
             if ctype != "multipart/form-data":
-                self._send(400, "Expected multipart/form-data")
+                self._send(400, "Expected multipart/form-data", "text/plain; charset=utf-8")
                 return
 
             # cgi.FieldStorage needs these
@@ -155,13 +155,13 @@ class handler(BaseHTTPRequestHandler):
             )
 
             if "file" not in form:
-                self._send(400, "Missing form field: file")
+                self._send(400, "Missing form field: file", "text/plain; charset=utf-8")
                 return
 
             fileitem = form["file"]
             filename = getattr(fileitem, "filename", "") or ""
             if not filename.lower().endswith(".docx"):
-                self._send(400, "Please upload a .docx file")
+                self._send(400, "Please upload a .docx file", "text/plain; charset=utf-8")
                 return
 
             data = fileitem.file.read()
@@ -173,13 +173,13 @@ class handler(BaseHTTPRequestHandler):
             self._send(200, cleaned)
 
         except Exception as e:
-            self._send(500, f"Server error: {e}")
+            self._send(500, f"Server error: {e}", "text/plain; charset=utf-8")
 
     def do_GET(self):
-        self._send(405, "POST only")
+        self._send(405, "POST only", "text/plain; charset=utf-8")
 
-    def _send(self, status: int, body: str):
+    def _send(self, status: int, body: str, content_type: str = "text/html; charset=utf-8"):
         self.send_response(status)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Type", content_type)
         self.end_headers()
         self.wfile.write(body.encode("utf-8"))

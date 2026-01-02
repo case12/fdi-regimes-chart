@@ -63,20 +63,82 @@
         margin: 0 0 10px;
         font-size: 16px;
       }
-      textarea {
+      .html-output {
         width: 100%;
-        height: 240px;
+        min-height: 240px;
+        max-height: 500px;
+        overflow-y: auto;
         border-radius: 10px;
         border: 1px solid #ccc;
-        padding: 10px;
+        padding: 14px;
+        background: white;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial,
+          sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .html-output :first-child {
+        margin-top: 0;
+      }
+      .html-output :last-child {
+        margin-bottom: 0;
+      }
+      .html-output h1,
+      .html-output h2,
+      .html-output h3,
+      .html-output h4,
+      .html-output h5,
+      .html-output h6 {
+        margin: 1em 0 0.5em;
+        font-weight: 600;
+      }
+      .html-output ul,
+      .html-output ol {
+        margin: 0.5em 0;
+        padding-left: 1.5em;
+      }
+      .html-output li {
+        margin: 0.25em 0;
+      }
+      .html-output p {
+        margin: 0.5em 0;
+      }
+      .html-output blockquote {
+        margin: 0.5em 0;
+        padding-left: 1em;
+        border-left: 3px solid #ddd;
+      }
+      .html-output code,
+      .html-output pre {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
           "Liberation Mono", "Courier New", monospace;
-        font-size: 12px;
+        font-size: 0.9em;
+      }
+      .html-output pre {
+        background: #f5f5f5;
+        padding: 10px;
+        border-radius: 4px;
+        overflow-x: auto;
+      }
+      .html-output a {
+        color: #0066cc;
+        text-decoration: underline;
+      }
+      .html-output.viewing-source {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace !important;
+        font-size: 12px !important;
+        white-space: pre-wrap !important;
+        background: #f9f9f9 !important;
       }
       .card .actions {
         display: flex;
         gap: 10px;
         margin-top: 10px;
+      }
+      .view-toggle {
+        font-size: 12px;
+        padding: 6px 10px;
       }
       .small {
         font-size: 12px;
@@ -92,7 +154,6 @@
       <div class="small">or</div>
       <div class="row">
         <input id="file" type="file" accept=".docx" />
-        <button id="convert" class="btn" disabled>Convert</button>
       </div>
     </div>
 
@@ -101,33 +162,45 @@
     <div id="out" class="grid" style="display: none">
       <div class="card">
         <h2>Jurisdiction</h2>
-        <textarea id="sec-jur"></textarea>
+        <div id="sec-jur" class="html-output"></div>
         <div class="actions">
-          <button class="btn" data-copy="sec-jur">Copy</button>
+          <button class="btn view-toggle" data-toggle="sec-jur">
+            View HTML
+          </button>
+          <button class="btn" data-copy="sec-jur">Copy HTML</button>
         </div>
       </div>
 
       <div class="card">
         <h2>Thresholds</h2>
-        <textarea id="sec-thr"></textarea>
+        <div id="sec-thr" class="html-output"></div>
         <div class="actions">
-          <button class="btn" data-copy="sec-thr">Copy</button>
+          <button class="btn view-toggle" data-toggle="sec-thr">
+            View HTML
+          </button>
+          <button class="btn" data-copy="sec-thr">Copy HTML</button>
         </div>
       </div>
 
       <div class="card">
         <h2>Procedures</h2>
-        <textarea id="sec-proc"></textarea>
+        <div id="sec-proc" class="html-output"></div>
         <div class="actions">
-          <button class="btn" data-copy="sec-proc">Copy</button>
+          <button class="btn view-toggle" data-toggle="sec-proc">
+            View HTML
+          </button>
+          <button class="btn" data-copy="sec-proc">Copy HTML</button>
         </div>
       </div>
 
       <div class="card">
         <h2>Standard of Review / Penalties</h2>
-        <textarea id="sec-std"></textarea>
+        <div id="sec-std" class="html-output"></div>
         <div class="actions">
-          <button class="btn" data-copy="sec-std">Copy</button>
+          <button class="btn view-toggle" data-toggle="sec-std">
+            View HTML
+          </button>
+          <button class="btn" data-copy="sec-std">Copy HTML</button>
         </div>
       </div>
     </div>
@@ -135,7 +208,6 @@
     <script>
       const drop = document.getElementById("drop");
       const fileInput = document.getElementById("file");
-      const convertBtn = document.getElementById("convert");
       const statusEl = document.getElementById("status");
       const out = document.getElementById("out");
 
@@ -144,21 +216,46 @@
       const secProc = document.getElementById("sec-proc");
       const secStd = document.getElementById("sec-std");
 
-      let currentFile = null;
+      // Store HTML source for each section
+      const htmlSources = {
+        "sec-jur": "",
+        "sec-thr": "",
+        "sec-proc": "",
+        "sec-std": "",
+      };
 
       function setStatus(msg) {
         statusEl.textContent = msg || "";
       }
 
-      function setFile(f) {
-        currentFile = f;
-        convertBtn.disabled = !currentFile;
-        if (currentFile) setStatus(`Selected: ${currentFile.name}`);
+      async function handleFile(f) {
+        if (!f) return;
+        setStatus(`Processing: ${f.name}`);
+        try {
+          const htmlText = await convertDocx(f);
+          const sections = splitSections(htmlText);
+
+          // Store HTML sources and render
+          htmlSources["sec-jur"] = sections.jurisdiction;
+          htmlSources["sec-thr"] = sections.thresholds;
+          htmlSources["sec-proc"] = sections.procedures;
+          htmlSources["sec-std"] = sections.standard;
+
+          secJur.innerHTML = sections.jurisdiction;
+          secThr.innerHTML = sections.thresholds;
+          secProc.innerHTML = sections.procedures;
+          secStd.innerHTML = sections.standard;
+
+          out.style.display = "grid";
+          setStatus("Done.");
+        } catch (err) {
+          setStatus("Error: " + (err?.message || err));
+        }
       }
 
       fileInput.addEventListener("change", () => {
         const f = fileInput.files?.[0];
-        if (f) setFile(f);
+        if (f) handleFile(f);
       });
 
       // Drag & drop
@@ -181,7 +278,7 @@
         const f = e.dataTransfer.files?.[0];
         if (f) {
           fileInput.value = "";
-          setFile(f);
+          handleFile(f);
         }
       });
 
@@ -223,7 +320,16 @@
       async function convertDocx(file) {
         setStatus("Converting…");
         out.style.display = "none";
-        secJur.value = secThr.value = secProc.value = secStd.value = "";
+        secJur.innerHTML =
+          secThr.innerHTML =
+          secProc.innerHTML =
+          secStd.innerHTML =
+            "";
+        htmlSources["sec-jur"] =
+          htmlSources["sec-thr"] =
+          htmlSources["sec-proc"] =
+          htmlSources["sec-std"] =
+            "";
 
         const fd = new FormData();
         fd.append("file", file);
@@ -236,41 +342,47 @@
         return await res.text();
       }
 
-      convertBtn.addEventListener("click", async () => {
-        if (!currentFile) return;
-        try {
-          const htmlText = await convertDocx(currentFile);
-          const sections = splitSections(htmlText);
-
-          secJur.value = sections.jurisdiction;
-          secThr.value = sections.thresholds;
-          secProc.value = sections.procedures;
-          secStd.value = sections.standard;
-
-          out.style.display = "grid";
-          setStatus("Done.");
-        } catch (err) {
-          setStatus("Error: " + (err?.message || err));
-        }
-      });
-
-      // Copy buttons
+      // Toggle between rendered HTML and HTML source
       document.addEventListener("click", async (e) => {
+        const toggleBtn = e.target.closest("[data-toggle]");
+        if (toggleBtn) {
+          const id = toggleBtn.getAttribute("data-toggle");
+          const el = document.getElementById(id);
+          const isViewingSource = el.classList.contains("viewing-source");
+
+          if (isViewingSource) {
+            // Switch back to rendered HTML
+            el.innerHTML = htmlSources[id];
+            el.classList.remove("viewing-source");
+            toggleBtn.textContent = "View HTML";
+          } else {
+            // Switch to HTML source
+            const source = htmlSources[id] || "";
+            el.textContent = source;
+            el.classList.add("viewing-source");
+            toggleBtn.textContent = "View Rendered";
+          }
+          return;
+        }
+
+        // Copy buttons
         const btn = e.target.closest("[data-copy]");
         if (!btn) return;
         const id = btn.getAttribute("data-copy");
-        const ta = document.getElementById(id);
-        const val = ta.value || "";
+        const htmlSource = htmlSources[id] || "";
 
         try {
-          await navigator.clipboard.writeText(val);
-          setStatus("Copied.");
+          await navigator.clipboard.writeText(htmlSource);
+          setStatus("Copied HTML to clipboard.");
         } catch {
           // Fallback
-          ta.focus();
-          ta.select();
+          const textarea = document.createElement("textarea");
+          textarea.value = htmlSource;
+          document.body.appendChild(textarea);
+          textarea.select();
           document.execCommand("copy");
-          setStatus("Copied.");
+          document.body.removeChild(textarea);
+          setStatus("Copied HTML to clipboard.");
         }
       });
     </script>
