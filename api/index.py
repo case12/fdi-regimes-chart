@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup, Comment, NavigableString
 
 
 ALLOWED = {
-    "p", "br",
+    "br",
     "h1", "h2", "h3", "h4", "h5", "h6",
     "ul", "ol", "li",
     "strong", "b", "em", "i", "u",
@@ -31,14 +31,17 @@ def insert_section_newlines(soup: BeautifulSoup, root) -> None:
     ]
 
     def find_first_tag_containing_ci(text: str):
-        target = text.lower()
-        s = root.find(string=lambda t: isinstance(t, str) and target in t.lower())
-        if not s:
-            return None
-        tag = s.parent
-        while tag and getattr(tag, "name", None) not in {"p","li","h1","h2","h3","h4","h5","h6","blockquote","pre"}:
-            tag = tag.parent
-        return tag or s.parent
+        target = text.lower().strip()
+        # Search all tags for case-insensitive text match
+        for tag in root.find_all(True):
+            tag_text = tag.get_text()
+            if target in tag_text.lower():
+                # Find the parent block-level element
+                block_tag = tag
+                while block_tag and getattr(block_tag, "name", None) not in {"li","h1","h2","h3","h4","h5","h6","blockquote","pre"}:
+                    block_tag = block_tag.parent
+                return block_tag or tag
+        return None
 
     for m in markers:
         t = find_first_tag_containing_ci(m)
@@ -67,7 +70,7 @@ def clean_html(html: str) -> str:
                     new_nodes.append(soup.new_tag("br"))
             node.replace_with(*new_nodes)
 
-    # Convert empty paragraphs to <br>
+    # Convert empty paragraphs to <br> (before unwrapping)
     for p in list(root.find_all("p")):
         if not p.get_text(strip=True) and not p.find(True):
             p.replace_with(soup.new_tag("br"))
