@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>DOCX → Sections</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial,
+          sans-serif;
+        margin: 24px;
+      }
+      .drop {
+        border: 2px dashed #999;
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+      }
+      .drop.drag {
+        border-color: #333;
+        background: #f6f6f6;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .btn {
+        padding: 10px 14px;
+        border: 1px solid #333;
+        border-radius: 10px;
+        background: white;
+        cursor: pointer;
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .status {
+        margin: 12px 0;
+        color: #333;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-top: 18px;
+      }
+      @media (min-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      .card {
+        border: 1px solid #ddd;
+        border-radius: 12px;
+        padding: 14px;
+      }
+      .card h2 {
+        margin: 0 0 10px;
+        font-size: 16px;
+      }
+      textarea {
+        width: 100%;
+        height: 240px;
+        border-radius: 10px;
+        border: 1px solid #ccc;
+        padding: 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+      }
+      .card .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .small {
+        font-size: 12px;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>DOCX → Sections</h1>
+
+    <div id="drop" class="drop">
+      <div><strong>Drag & drop</strong> a <code>.docx</code> here</div>
+      <div class="small">or</div>
+      <div class="row">
+        <input id="file" type="file" accept=".docx" />
+        <button id="convert" class="btn" disabled>Convert</button>
+      </div>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div id="out" class="grid" style="display: none">
+      <div class="card">
+        <h2>Jurisdiction</h2>
+        <textarea id="sec-jur"></textarea>
+        <div class="actions">
+          <button class="btn" data-copy="sec-jur">Copy</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Thresholds</h2>
+        <textarea id="sec-thr"></textarea>
+        <div class="actions">
+          <button class="btn" data-copy="sec-thr">Copy</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Procedures</h2>
+        <textarea id="sec-proc"></textarea>
+        <div class="actions">
+          <button class="btn" data-copy="sec-proc">Copy</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Standard of Review / Penalties</h2>
+        <textarea id="sec-std"></textarea>
+        <div class="actions">
+          <button class="btn" data-copy="sec-std">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const drop = document.getElementById("drop");
+      const fileInput = document.getElementById("file");
+      const convertBtn = document.getElementById("convert");
+      const statusEl = document.getElementById("status");
+      const out = document.getElementById("out");
+
+      const secJur = document.getElementById("sec-jur");
+      const secThr = document.getElementById("sec-thr");
+      const secProc = document.getElementById("sec-proc");
+      const secStd = document.getElementById("sec-std");
+
+      let currentFile = null;
+
+      function setStatus(msg) {
+        statusEl.textContent = msg || "";
+      }
+
+      function setFile(f) {
+        currentFile = f;
+        convertBtn.disabled = !currentFile;
+        if (currentFile) setStatus(`Selected: ${currentFile.name}`);
+      }
+
+      fileInput.addEventListener("change", () => {
+        const f = fileInput.files?.[0];
+        if (f) setFile(f);
+      });
+
+      // Drag & drop
+      ["dragenter", "dragover"].forEach((evt) =>
+        drop.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          drop.classList.add("drag");
+        })
+      );
+      ["dragleave", "drop"].forEach((evt) =>
+        drop.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          drop.classList.remove("drag");
+        })
+      );
+
+      drop.addEventListener("drop", (e) => {
+        const f = e.dataTransfer.files?.[0];
+        if (f) {
+          fileInput.value = "";
+          setFile(f);
+        }
+      });
+
+      function splitSections(htmlText) {
+        // Markers (case-insensitive)
+        const textLower = htmlText.toLowerCase();
+        const mThr = "foreign investors:";
+        const mProc = "authority in charge";
+        const mStd = "standard of review";
+
+        const iThr = textLower.indexOf(mThr);
+        const iProc = textLower.indexOf(mProc);
+        const iStd = textLower.indexOf(mStd);
+
+        // If markers missing, fall back gracefully
+        const safeSlice = (a, b) =>
+          htmlText
+            .slice(Math.max(0, a), b == null || b < 0 ? htmlText.length : b)
+            .trim();
+
+        const jurisdiction = iThr >= 0 ? safeSlice(0, iThr) : htmlText.trim();
+        const thresholds =
+          iThr >= 0 && iProc >= 0
+            ? safeSlice(iThr, iProc)
+            : iThr >= 0
+            ? safeSlice(iThr, iProc)
+            : "";
+        const procedures =
+          iProc >= 0 && iStd >= 0
+            ? safeSlice(iProc, iStd)
+            : iProc >= 0
+            ? safeSlice(iProc, iStd)
+            : "";
+        const standard = iStd >= 0 ? safeSlice(iStd, null) : "";
+
+        return { jurisdiction, thresholds, procedures, standard };
+      }
+
+      async function convertDocx(file) {
+        setStatus("Converting…");
+        out.style.display = "none";
+        secJur.value = secThr.value = secProc.value = secStd.value = "";
+
+        const fd = new FormData();
+        fd.append("file", file);
+
+        const res = await fetch("/api", { method: "POST", body: fd });
+        if (!res.ok) {
+          const msg = await res.text();
+          throw new Error(msg || `HTTP ${res.status}`);
+        }
+        return await res.text();
+      }
+
+      convertBtn.addEventListener("click", async () => {
+        if (!currentFile) return;
+        try {
+          const htmlText = await convertDocx(currentFile);
+          const sections = splitSections(htmlText);
+
+          secJur.value = sections.jurisdiction;
+          secThr.value = sections.thresholds;
+          secProc.value = sections.procedures;
+          secStd.value = sections.standard;
+
+          out.style.display = "grid";
+          setStatus("Done.");
+        } catch (err) {
+          setStatus("Error: " + (err?.message || err));
+        }
+      });
+
+      // Copy buttons
+      document.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-copy]");
+        if (!btn) return;
+        const id = btn.getAttribute("data-copy");
+        const ta = document.getElementById(id);
+        const val = ta.value || "";
+
+        try {
+          await navigator.clipboard.writeText(val);
+          setStatus("Copied.");
+        } catch {
+          // Fallback
+          ta.focus();
+          ta.select();
+          document.execCommand("copy");
+          setStatus("Copied.");
+        }
+      });
+    </script>
+  </body>
+</html>
