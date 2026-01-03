@@ -1,4 +1,6 @@
 import io
+import os
+import hashlib
 from http.server import BaseHTTPRequestHandler
 
 try:
@@ -9,6 +11,23 @@ except ImportError:
 import mammoth
 from bs4 import BeautifulSoup, Comment, NavigableString
 from bs4.formatter import HTMLFormatter
+
+
+def generate_token(username: str, password: str) -> str:
+    secret = os.environ.get("AUTH_SECRET", "default-secret-change-me")
+    data = f"{username}:{password}:{secret}"
+    return hashlib.sha256(data.encode()).hexdigest()
+
+
+def verify_token(token: str) -> bool:
+    expected_user = os.environ.get("AUTH_USERNAME", "")
+    expected_pass = os.environ.get("AUTH_PASSWORD", "")
+
+    if not expected_user or not expected_pass:
+        return False
+
+    expected_token = generate_token(expected_user, expected_pass)
+    return token == expected_token
 
 
 ALLOWED = {
@@ -198,6 +217,17 @@ def clean_html(html: str) -> str:
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
+        # Check authentication
+        auth_header = self.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            self._send(401, "Unauthorized", "text/plain; charset=utf-8")
+            return
+
+        token = auth_header[7:]  # Remove "Bearer " prefix
+        if not verify_token(token):
+            self._send(401, "Invalid token", "text/plain; charset=utf-8")
+            return
+
         try:
             ctype, pdict = cgi.parse_header(self.headers.get("content-type", ""))
             if ctype != "multipart/form-data":
