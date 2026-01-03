@@ -1,9 +1,14 @@
 import io
-import cgi
 from http.server import BaseHTTPRequestHandler
+
+try:
+    import cgi
+except ImportError:
+    from legacy_cgi import cgi
 
 import mammoth
 from bs4 import BeautifulSoup, Comment, NavigableString
+from bs4.formatter import HTMLFormatter
 
 
 ALLOWED = {
@@ -49,8 +54,83 @@ def insert_section_newlines(soup: BeautifulSoup, root) -> None:
             t.insert_before(soup.new_string("\n\n"))
 
 
+def split_sections(html: str) -> dict:
+    """Split HTML into sections, ensuring each section has valid HTML structure."""
+    html_lower = html.lower()
+    formatter = HTMLFormatter(indent=4)
+    
+    markers = [
+        ("foreign investors:", "thresholds"),
+        ("authority in charge", "procedures"),
+        ("standard of review", "standard"),
+    ]
+    
+    # Find text positions of markers in the HTML string
+    positions = []
+    for marker_text, _ in markers:
+        pos = html_lower.find(marker_text)
+        if pos >= 0:
+            positions.append(pos)
+    
+    # Sort positions
+    positions = sorted(set(positions))
+    
+    sections = {
+        "jurisdiction": "",
+        "thresholds": "",
+        "procedures": "",
+        "standard": "",
+    }
+    
+    if not positions:
+        # No markers found, return everything as jurisdiction
+        section_soup = BeautifulSoup(html, "html.parser")
+        sections["jurisdiction"] = section_soup.prettify(formatter=formatter)
+        return sections
+    
+    # Split HTML string at positions and re-parse each section
+    # Wrap in a div to ensure valid structure, then extract contents
+    section_names = ["jurisdiction", "thresholds", "procedures", "standard"]
+    prev_pos = 0
+    
+    for i, pos in enumerate(positions):
+        # Extract section from prev_pos to pos
+        section_html = html[prev_pos:pos].strip()
+        if section_html:
+            # Wrap in a container div to ensure valid HTML structure
+            wrapped_html = f"<div>{section_html}</div>"
+            section_soup = BeautifulSoup(wrapped_html, "html.parser")
+            container = section_soup.find("div")
+            if container:
+                # Get the inner contents (without the wrapper div)
+                inner_html = "".join(str(child) for child in container.children)
+                # Re-parse to prettify
+                inner_soup = BeautifulSoup(inner_html, "html.parser")
+                sections[section_names[i]] = inner_soup.prettify(formatter=formatter)
+            else:
+                sections[section_names[i]] = section_soup.prettify(formatter=formatter)
+        prev_pos = pos
+    
+    # Last section
+    if prev_pos < len(html):
+        section_html = html[prev_pos:].strip()
+        if section_html:
+            wrapped_html = f"<div>{section_html}</div>"
+            section_soup = BeautifulSoup(wrapped_html, "html.parser")
+            container = section_soup.find("div")
+            if container:
+                inner_html = "".join(str(child) for child in container.children)
+                inner_soup = BeautifulSoup(inner_html, "html.parser")
+                sections[section_names[len(positions)]] = inner_soup.prettify(formatter=formatter)
+            else:
+                sections[section_names[len(positions)]] = section_soup.prettify(formatter=formatter)
+    
+    return sections
+
+
 def clean_html(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
+    formatter = HTMLFormatter(indent=4)
 
     # Remove comments
     for c in soup.find_all(string=lambda s: isinstance(s, Comment)):
@@ -129,8 +209,8 @@ def clean_html(html: str) -> str:
 
     if soup.body:
         # Format HTML with proper indentation
-        return soup.body.prettify()
-    return soup.prettify()
+        return soup.body.prettify(formatter=formatter)
+    return soup.prettify(formatter=formatter)
 
 
 class handler(BaseHTTPRequestHandler):
@@ -170,8 +250,13 @@ class handler(BaseHTTPRequestHandler):
             # Underline -> <u>
             result = mammoth.convert_to_html(io.BytesIO(data), style_map="u => u")
             cleaned = clean_html(result.value)
-
-            self._send(200, cleaned)
+            
+            # Split into sections with valid HTML
+            sections = split_sections(cleaned)
+            
+            # Return as JSON
+            import json
+            self._send(200, json.dumps(sections), "application/json; charset=utf-8")
 
         except Exception as e:
             self._send(500, f"Server error: {e}", "text/plain; charset=utf-8")

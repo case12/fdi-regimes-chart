@@ -163,19 +163,18 @@
         if (!f) return;
         setStatus(`Processing: ${f.name}`);
         try {
-          const htmlText = await convertDocx(f);
-          const sections = splitSections(htmlText);
+          const sections = await convertDocx(f);
 
           // Store HTML sources and render
-          htmlSources["sec-jur"] = sections.jurisdiction;
-          htmlSources["sec-thr"] = sections.thresholds;
-          htmlSources["sec-proc"] = sections.procedures;
-          htmlSources["sec-std"] = sections.standard;
+          htmlSources["sec-jur"] = sections.jurisdiction || "";
+          htmlSources["sec-thr"] = sections.thresholds || "";
+          htmlSources["sec-proc"] = sections.procedures || "";
+          htmlSources["sec-std"] = sections.standard || "";
 
-          secJur.textContent = sections.jurisdiction;
-          secThr.textContent = sections.thresholds;
-          secProc.textContent = sections.procedures;
-          secStd.textContent = sections.standard;
+          secJur.textContent = sections.jurisdiction || "";
+          secThr.textContent = sections.thresholds || "";
+          secProc.textContent = sections.procedures || "";
+          secStd.textContent = sections.standard || "";
 
           out.style.display = "grid";
           setStatus("Done.");
@@ -213,41 +212,6 @@
         }
       });
 
-      function splitSections(htmlText) {
-        // Markers (case-insensitive)
-        const textLower = htmlText.toLowerCase();
-        const mThr = "foreign investors:";
-        const mProc = "authority in charge";
-        const mStd = "standard of review";
-
-        const iThr = textLower.indexOf(mThr);
-        const iProc = textLower.indexOf(mProc);
-        const iStd = textLower.indexOf(mStd);
-
-        // If markers missing, fall back gracefully
-        const safeSlice = (a, b) =>
-          htmlText
-            .slice(Math.max(0, a), b == null || b < 0 ? htmlText.length : b)
-            .trim();
-
-        const jurisdiction = iThr >= 0 ? safeSlice(0, iThr) : htmlText.trim();
-        const thresholds =
-          iThr >= 0 && iProc >= 0
-            ? safeSlice(iThr, iProc)
-            : iThr >= 0
-            ? safeSlice(iThr, iProc)
-            : "";
-        const procedures =
-          iProc >= 0 && iStd >= 0
-            ? safeSlice(iProc, iStd)
-            : iProc >= 0
-            ? safeSlice(iProc, iStd)
-            : "";
-        const standard = iStd >= 0 ? safeSlice(iStd, null) : "";
-
-        return { jurisdiction, thresholds, procedures, standard };
-      }
-
       async function convertDocx(file) {
         setStatus("Converting…");
         out.style.display = "none";
@@ -270,7 +234,8 @@
           const msg = await res.text();
           throw new Error(msg || `HTTP ${res.status}`);
         }
-        return await res.text();
+        const sections = await res.json();
+        return sections;
       }
 
       // Copy buttons
