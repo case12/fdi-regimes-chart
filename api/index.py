@@ -55,76 +55,59 @@ def insert_section_newlines(soup: BeautifulSoup, root) -> None:
 
 
 def split_sections(html: str) -> dict:
-    """Split HTML into sections, ensuring each section has valid HTML structure."""
-    html_lower = html.lower()
+    """Split HTML into sections at the DOM level, not string level."""
+    soup = BeautifulSoup(html, "html.parser")
     formatter = HTMLFormatter(indent=4)
-    
+
     markers = [
         ("foreign investors:", "thresholds"),
         ("authority in charge", "procedures"),
         ("standard of review", "standard"),
     ]
-    
-    # Find text positions of markers in the HTML string
-    positions = []
-    for marker_text, _ in markers:
-        pos = html_lower.find(marker_text)
-        if pos >= 0:
-            positions.append(pos)
-    
-    # Sort positions
-    positions = sorted(set(positions))
-    
+
     sections = {
         "jurisdiction": "",
         "thresholds": "",
         "procedures": "",
         "standard": "",
     }
-    
-    if not positions:
-        # No markers found, return everything as jurisdiction
-        section_soup = BeautifulSoup(html, "html.parser")
-        sections["jurisdiction"] = section_soup.prettify(formatter=formatter)
-        return sections
-    
-    # Split HTML string at positions and re-parse each section
-    # Wrap in a div to ensure valid structure, then extract contents
-    section_names = ["jurisdiction", "thresholds", "procedures", "standard"]
-    prev_pos = 0
-    
-    for i, pos in enumerate(positions):
-        # Extract section from prev_pos to pos
-        section_html = html[prev_pos:pos].strip()
-        if section_html:
-            # Wrap in a container div to ensure valid HTML structure
-            wrapped_html = f"<div>{section_html}</div>"
-            section_soup = BeautifulSoup(wrapped_html, "html.parser")
-            container = section_soup.find("div")
-            if container:
-                # Get the inner contents (without the wrapper div)
-                inner_html = "".join(str(child) for child in container.children)
-                # Re-parse to prettify
-                inner_soup = BeautifulSoup(inner_html, "html.parser")
-                sections[section_names[i]] = inner_soup.prettify(formatter=formatter)
+
+    # Get all top-level nodes (elements and text nodes)
+    root = soup.body if soup.body else soup
+    all_nodes = list(root.children)
+
+    # Find which node index contains each marker
+    marker_positions = []  # list of (node_index, marker_name, section_key)
+    for marker_text, section_key in markers:
+        target = marker_text.lower()
+        for i, node in enumerate(all_nodes):
+            node_text = node.get_text().lower() if hasattr(node, 'get_text') else str(node).lower()
+            if target in node_text:
+                marker_positions.append((i, marker_text, section_key))
+                break
+
+    # Sort by node index
+    marker_positions.sort(key=lambda x: x[0])
+
+    # Build sections by collecting nodes between markers
+    section_names = ["jurisdiction"] + [m[2] for m in marker_positions]
+    split_indices = [0] + [m[0] for m in marker_positions] + [len(all_nodes)]
+
+    for i, section_name in enumerate(section_names):
+        start_idx = split_indices[i]
+        end_idx = split_indices[i + 1]
+
+        # Collect nodes for this section
+        section_soup = BeautifulSoup("", "html.parser")
+        for node in all_nodes[start_idx:end_idx]:
+            # Deep copy the node to avoid modifying original
+            if hasattr(node, 'name'):
+                section_soup.append(BeautifulSoup(str(node), "html.parser"))
             else:
-                sections[section_names[i]] = section_soup.prettify(formatter=formatter)
-        prev_pos = pos
-    
-    # Last section
-    if prev_pos < len(html):
-        section_html = html[prev_pos:].strip()
-        if section_html:
-            wrapped_html = f"<div>{section_html}</div>"
-            section_soup = BeautifulSoup(wrapped_html, "html.parser")
-            container = section_soup.find("div")
-            if container:
-                inner_html = "".join(str(child) for child in container.children)
-                inner_soup = BeautifulSoup(inner_html, "html.parser")
-                sections[section_names[len(positions)]] = inner_soup.prettify(formatter=formatter)
-            else:
-                sections[section_names[len(positions)]] = section_soup.prettify(formatter=formatter)
-    
+                section_soup.append(NavigableString(str(node)))
+
+        sections[section_name] = section_soup.prettify(formatter=formatter)
+
     return sections
 
 
